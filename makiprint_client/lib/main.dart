@@ -1,8 +1,13 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'models/document.dart';
+import 'pages/printing_settings_page.dart';
+import 'pages/scan_qr_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -44,7 +49,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final List<String> _documents = [];
+  final List<Document> _documents = [];
+  Timer? _expiryTimer;
 
   static const String _prefsKey = 'uploaded_documents';
 
@@ -52,6 +58,33 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _loadDocuments();
+    _startExpiryTimer();
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startExpiryTimer() {
+    _expiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      bool hasExpired = false;
+      
+      for (var doc in List.from(_documents)) {
+        if (doc.isExpired) {
+          _documents.remove(doc);
+          hasExpired = true;
+        }
+      }
+      
+      // Update UI every second for countdown timer
+      setState(() {});
+      
+      if (hasExpired) {
+        _saveDocuments();
+      }
+    });
   }
 
   Future<void> _loadDocuments() async {
@@ -62,7 +95,9 @@ class _MyHomePageState extends State<MyHomePage> {
         final List<dynamic> decoded = json.decode(jsonStr);
         setState(() {
           _documents.clear();
-          _documents.addAll(decoded.map((e) => e.toString()));
+          _documents.addAll(
+            decoded.map((e) => Document.fromJson(Map<String, dynamic>.from(e))),
+          );
         });
       } catch (_) {
         // ignore malformed saved data
@@ -72,7 +107,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _saveDocuments() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonStr = json.encode(_documents);
+    final jsonStr = json.encode(_documents.map((doc) => doc.toJson()).toList());
     await prefs.setString(_prefsKey, jsonStr);
   }
 
@@ -81,8 +116,8 @@ class _MyHomePageState extends State<MyHomePage> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add file'),
-        content: const Text('Add file coming soon!'),
+        title: const Text('Top-up'),
+        content: const Text('Top-up coming soon!'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -188,7 +223,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                         children: [
                                           Expanded(
                                             child: Text(
-                                              doc,
+                                              doc.fileName,
                                               style: Theme.of(context).textTheme.titleMedium,
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -203,8 +238,14 @@ class _MyHomePageState extends State<MyHomePage> {
                                                   title: const Text('Delete file'),
                                                   content: const Text('Are you sure you want to delete this file?'),
                                                   actions: [
-                                                    TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-                                                    TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Delete')),
+                                                    TextButton(
+                                                      onPressed: () => Navigator.of(ctx).pop(false),
+                                                      child: const Text('Cancel'),
+                                                    ),
+                                                    TextButton(
+                                                      onPressed: () => Navigator.of(ctx).pop(true),
+                                                      child: const Text('Delete'),
+                                                    ),
                                                   ],
                                                 ),
                                               );
@@ -222,18 +263,65 @@ class _MyHomePageState extends State<MyHomePage> {
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [
-                                          ElevatedButton(
-                                            onPressed: () {
-                                              // Placeholder for Printing Settings
-                                            },
-                                            child: const Text('Printing Settings'),
+                                          
+                                          Text(
+                                            'Php ${doc.printingCost.toStringAsFixed(2)}',
+                                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: Theme.of(context).colorScheme.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Expires in: ${doc.formattedTimeRemaining}',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          color: doc.timeRemaining.inMinutes < 10 ? Colors.red : null,
+                                          fontWeight: doc.timeRemaining.inMinutes < 10 ? FontWeight.bold : null,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => const PrintingSettingsPage(),
+                                                  ),
+                                                );
+                                              },
+                                              icon: const Icon(Icons.settings),
+                                              label: const Text('Printing Settings'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.green,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                              ),
+                                            ),
                                           ),
                                           const SizedBox(width: 12),
-                                          ElevatedButton(
-                                            onPressed: () {
-                                              // Placeholder for Scan
-                                            },
-                                            child: const Text('Scan'),
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) => const ScanQRPage(),
+                                                  ),
+                                                );
+                                              },
+                                              icon: const Icon(Icons.qr_code_scanner),
+                                              label: const Text('Print'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.green,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -253,75 +341,89 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          // Use FilePicker to select a file and persist it
           final messenger = ScaffoldMessenger.of(context);
-          try {
-            final result = await FilePicker.platform.pickFiles(allowMultiple: false);
+          bool isLoading = false;
+
+          void showLoadingIndicator() {
             if (!mounted) return;
-            if (result != null && result.files.isNotEmpty) {
-              final fileName = result.files.single.name;
-              setState(() {
-                _documents.add(fileName);
-              });
-              await _saveDocuments();
+            isLoading = true;
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (BuildContext context) => WillPopScope(
+                onWillPop: () async => false,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            );
+          }
+
+          void hideLoadingIndicator() {
+            if (!mounted || !isLoading) return;
+            isLoading = false;
+            Navigator.of(context, rootNavigator: true).pop();
+          }
+
+          try {
+            // Configure file picker for PDF and Word documents
+            final result = await FilePicker.platform.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: ['pdf', 'doc', 'docx'],
+              allowMultiple: false,
+              withData: true, // Load file into memory for preview/validation
+            );
+
+            if (!mounted) return;
+
+              if (result != null && result.files.isNotEmpty) {
+                showLoadingIndicator();
+                
+                final file = result.files.single;
+                
+                // Validate file size (max 10MB for mobile optimization)
+                if (file.size > 10 * 1024 * 1024) {
+                  hideLoadingIndicator();
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('File too large. Maximum size is 10MB.')),
+                  );
+                  return;
+                }
+
+                // Add a small delay to show loading indicator
+                await Future.delayed(const Duration(milliseconds: 500));
+
+                final newDoc = Document(
+                  fileName: file.name,
+                  uploadTime: DateTime.now(),
+                );
+
+                setState(() {
+                  _documents.add(newDoc);
+                });
+                await _saveDocuments();              hideLoadingIndicator();
+              
+              messenger.showSnackBar(
+                const SnackBar(content: Text('File uploaded successfully')),
+              );
             }
           } catch (e) {
-            // show simple error using captured messenger (avoids using context after await)
-            messenger.showSnackBar(SnackBar(content: Text('File pick failed: $e')));
+            if (isLoading) {
+              hideLoadingIndicator();
+            }
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('Could not upload file: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
           }
         },
+        label: const Text('UPLOAD FILE'),
         tooltip: 'Add document',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
-
-class AddDocumentPage extends StatefulWidget {
-  const AddDocumentPage({super.key});
-
-  @override
-  State<AddDocumentPage> createState() => _AddDocumentPageState();
-}
-
-class _AddDocumentPageState extends State<AddDocumentPage> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Upload File')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Simulate file upload by entering a filename:'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _controller,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Filename',
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop(_controller.text.trim());
-              },
-              child: const Text('Upload'),
-            ),
-          ],
-        ),
+        icon: const Icon(Icons.add),
       ),
     );
   }
