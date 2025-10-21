@@ -47,7 +47,7 @@ class _ScanQRPageState extends State<ScanQRPage> {
           Expanded(
             child: MobileScanner(
               controller: cameraController,
-              errorBuilder: (context, error) => Center(
+              /*errorBuilder: (context, error) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -74,7 +74,7 @@ class _ScanQRPageState extends State<ScanQRPage> {
                     ],
                   ),
                 ),
-              ),
+              ),*/
               onDetect: (capture) {
                 final List<Barcode> barcodes = capture.barcodes;
                 for (final barcode in barcodes) {
