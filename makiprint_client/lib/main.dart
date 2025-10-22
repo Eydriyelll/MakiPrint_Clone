@@ -286,13 +286,40 @@ class _MyHomePageState extends State<MyHomePage> {
                                         children: [
                                           Expanded(
                                             child: ElevatedButton.icon(
-                                              onPressed: () {
-                                                Navigator.push(
+                                              onPressed: () async {
+                                                // Navigate to PrintingSettingsPage and wait for returned settings
+                                                final result = await Navigator.push<Map<String, Object>>(
                                                   context,
                                                   MaterialPageRoute(
-                                                    builder: (context) => const PrintingSettingsPage(),
+                                                    builder: (context) => PrintingSettingsPage(
+                                                      // Optionally pass initial values if Document stores them.
+                                                      // Using defaults here.
+                                                    ),
                                                   ),
                                                 );
+
+                                                if (!mounted) return;
+
+                                                if (result != null) {
+                                                  // Update document printingCost (Document.printingCost is used as double elsewhere)
+                                                  final totalCost = result['totalCost'];
+                                                  double costDouble = 0.0;
+                                                  if (totalCost is int) {
+                                                    costDouble = totalCost.toDouble();
+                                                  } else if (totalCost is double) {
+                                                    costDouble = totalCost;
+                                                  } else if (totalCost is String) {
+                                                    costDouble = double.tryParse(totalCost) ?? 0.0;
+                                                  }
+
+                                                  setState(() {
+                                                    _documents[idx].printingCost = costDouble;
+                                                    // If your Document model supports storing more fields (copies, paperSize, isColor),
+                                                    // set them here similarly when available.
+                                                  });
+
+                                                  await _saveDocuments();
+                                                }
                                               },
                                               icon: const Icon(Icons.settings),
                                               label: const Text('Printing Settings'),
