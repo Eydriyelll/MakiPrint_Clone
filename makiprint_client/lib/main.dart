@@ -286,13 +286,30 @@ class _MyHomePageState extends State<MyHomePage> {
                                         children: [
                                           Expanded(
                                             child: ElevatedButton.icon(
-                                              onPressed: () {
-                                                Navigator.push(
+                                              onPressed: () async {
+                                                // Navigate to PrintingSettingsPage and wait for returned settings
+                                                final result = await Navigator.push<Map<String, dynamic>>(
                                                   context,
                                                   MaterialPageRoute(
-                                                    builder: (context) => const PrintingSettingsPage(),
+                                                    builder: (context) => PrintingSettingsPage(
+                                                      initialCopies: _documents[idx].copies,
+                                                      initialPaperSize: _documents[idx].paperSize,
+                                                      initialIsColor: _documents[idx].isColor,
+                                                    ),
                                                   ),
                                                 );
+
+                                                if (!mounted) return;
+
+                                                if (result != null) {
+                                                  setState(() {
+                                                    _documents[idx].copies = result['copies'] as int;
+                                                    _documents[idx].paperSize = result['paperSize'] as String;
+                                                    _documents[idx].isColor = result['isColor'] as bool;
+                                                    _documents[idx].printingCost = (result['totalCost'] as num).toDouble();
+                                                  });
+                                                  _saveDocuments(); // Save changes to persistent storage
+                                                }
                                               },
                                               icon: const Icon(Icons.settings),
                                               label: const Text('Printing Settings'),
@@ -397,7 +414,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
                 final newDoc = Document(
                   fileName: file.name,
-                  uploadTime: DateTime.now(),
+                  copies: 1, // Default values
+                  paperSize: 'A4',
+                  isColor: true,
                 );
 
                 setState(() {
