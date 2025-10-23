@@ -288,12 +288,13 @@ class _MyHomePageState extends State<MyHomePage> {
                                             child: ElevatedButton.icon(
                                               onPressed: () async {
                                                 // Navigate to PrintingSettingsPage and wait for returned settings
-                                                final result = await Navigator.push<Map<String, Object>>(
+                                                final result = await Navigator.push<Map<String, dynamic>>(
                                                   context,
                                                   MaterialPageRoute(
                                                     builder: (context) => PrintingSettingsPage(
-                                                      // Optionally pass initial values if Document stores them.
-                                                      // Using defaults here.
+                                                      initialCopies: _documents[idx].copies,
+                                                      initialPaperSize: _documents[idx].paperSize,
+                                                      initialIsColor: _documents[idx].isColor,
                                                     ),
                                                   ),
                                                 );
@@ -301,24 +302,13 @@ class _MyHomePageState extends State<MyHomePage> {
                                                 if (!mounted) return;
 
                                                 if (result != null) {
-                                                  // Update document printingCost (Document.printingCost is used as double elsewhere)
-                                                  final totalCost = result['totalCost'];
-                                                  double costDouble = 0.0;
-                                                  if (totalCost is int) {
-                                                    costDouble = totalCost.toDouble();
-                                                  } else if (totalCost is double) {
-                                                    costDouble = totalCost;
-                                                  } else if (totalCost is String) {
-                                                    costDouble = double.tryParse(totalCost) ?? 0.0;
-                                                  }
-
                                                   setState(() {
-                                                    _documents[idx].printingCost = costDouble;
-                                                    // If your Document model supports storing more fields (copies, paperSize, isColor),
-                                                    // set them here similarly when available.
+                                                    _documents[idx].copies = result['copies'] as int;
+                                                    _documents[idx].paperSize = result['paperSize'] as String;
+                                                    _documents[idx].isColor = result['isColor'] as bool;
+                                                    _documents[idx].printingCost = (result['totalCost'] as num).toDouble();
                                                   });
-
-                                                  await _saveDocuments();
+                                                  _saveDocuments(); // Save changes to persistent storage
                                                 }
                                               },
                                               icon: const Icon(Icons.settings),
@@ -424,7 +414,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
                 final newDoc = Document(
                   fileName: file.name,
-                  uploadTime: DateTime.now(),
+                  copies: 1, // Default values
+                  paperSize: 'A4',
+                  isColor: true,
                 );
 
                 setState(() {

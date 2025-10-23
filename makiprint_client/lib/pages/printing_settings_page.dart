@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // added
 
 /// PrintingSettingsPage
 /// - No main() here (app entry is in main.dart)
@@ -25,6 +26,10 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
   late String _paperSize;
   late bool _isColor;
 
+  // Controller & focus for copies input
+  late final TextEditingController _copiesController;
+  late final FocusNode _copiesFocusNode;
+
   // Options for the paper size dropdown (labels must match cost map keys)
   final List<String> _paperSizes = ['A4', 'Letter', 'Legal', 'A5'];
 
@@ -45,6 +50,33 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
     _copies = widget.initialCopies;
     _paperSize = widget.initialPaperSize;
     _isColor = widget.initialIsColor;
+
+    _copiesController = TextEditingController(text: _copies.toString());
+    _copiesFocusNode = FocusNode();
+
+    _copiesFocusNode.addListener(() {
+      if (!_copiesFocusNode.hasFocus) {
+        // When focus is lost, ensure a valid value (reset to 1 if empty/invalid)
+        final text = _copiesController.text;
+        final parsed = int.tryParse(text ?? '');
+        if (parsed == null || parsed < 1) {
+          _copies = 1;
+          _copiesController.text = '1';
+          _copiesController.selection = TextSelection.collapsed(offset: 1);
+        } else {
+          // keep parsed valid value
+          _copies = parsed;
+        }
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _copiesController.dispose();
+    _copiesFocusNode.dispose();
+    super.dispose();
   }
 
   // Computed costs
@@ -100,17 +132,45 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                   icon: const Icon(Icons.remove_circle),
                   onPressed: () {
                     setState(() {
-                      if (_copies > 1) _copies--;
+                      if (_copies > 1) {
+                        _copies--;
+                        _copiesController.text = _copies.toString();
+                        _copiesController.selection = TextSelection.collapsed(offset: _copiesController.text.length);
+                      }
                     });
                   },
                 ),
-                SizedBox(
-                  width: 60,
-                  child: Center(
-                    child: Text(
-                      '$_copies',
-                      style: const TextStyle(fontSize: 20),
+                Expanded(
+                  child: TextFormField(
+                    controller: _copiesController,
+                    focusNode: _copiesFocusNode,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly, // blocks letters
+                    ],
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     ),
+                    onChanged: (value) {
+                      if (value.isEmpty) {
+                        // allow empty while focused; do not change _copies until focus lost
+                        return;
+                      }
+                      final parsed = int.tryParse(value);
+                      if (parsed != null && parsed > 0) {
+                        setState(() {
+                          _copies = parsed;
+                        });
+                      } else {
+                        // If non-numeric somehow gets through, reset immediately
+                        _copies = 1;
+                        _copiesController.text = '1';
+                        _copiesController.selection = TextSelection.collapsed(offset: 1);
+                        setState(() {});
+                      }
+                    },
                   ),
                 ),
                 IconButton(
@@ -118,26 +178,10 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                   onPressed: () {
                     setState(() {
                       _copies++;
+                      _copiesController.text = _copies.toString();
+                      _copiesController.selection = TextSelection.collapsed(offset: _copiesController.text.length);
                     });
                   },
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    initialValue: '$_copies',
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Set copies',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onChanged: (val) {
-                      final v = int.tryParse(val);
-                      if (v != null && v > 0) {
-                        setState(() => _copies = v);
-                      }
-                    },
-                  ),
                 ),
               ],
             ),
