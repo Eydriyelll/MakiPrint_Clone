@@ -58,7 +58,7 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
       if (!_copiesFocusNode.hasFocus) {
         // When focus is lost, ensure a valid value (reset to 1 if empty/invalid)
         final text = _copiesController.text;
-        final parsed = int.tryParse(text ?? '');
+        final parsed = int.tryParse(text);
         if (parsed == null || parsed < 1) {
           _copies = 1;
           _copiesController.text = '1';
@@ -80,17 +80,18 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
   }
 
   // Computed costs
-  int get _perCopyCost => (_baseCosts[_paperSize] ?? 0) + (_isColor ? _colorExtra : 0);
+  int get _perCopyCost =>
+      (_baseCosts[_paperSize] ?? 0) + (_isColor ? _colorExtra : 0);
   int get _totalCost => _perCopyCost * _copies;
 
   // Build a result map to return to the caller
   Map<String, Object> get _resultMap => {
-        'copies': _copies,
-        'paperSize': _paperSize,
-        'isColor': _isColor,
-        'perCopyCost': _perCopyCost,
-        'totalCost': _totalCost,
-      };
+    'copies': _copies,
+    'paperSize': _paperSize,
+    'isColor': _isColor,
+    'perCopyCost': _perCopyCost,
+    'totalCost': _totalCost,
+  };
 
   // pops and returns current settings to caller
   void _returnToCaller() {
@@ -135,7 +136,9 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                       if (_copies > 1) {
                         _copies--;
                         _copiesController.text = _copies.toString();
-                        _copiesController.selection = TextSelection.collapsed(offset: _copiesController.text.length);
+                        _copiesController.selection = TextSelection.collapsed(
+                          offset: _copiesController.text.length,
+                        );
                       }
                     });
                   },
@@ -151,7 +154,10 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                     textAlign: TextAlign.center,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
                     ),
                     onChanged: (value) {
                       if (value.isEmpty) {
@@ -167,7 +173,9 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                         // If non-numeric somehow gets through, reset immediately
                         _copies = 1;
                         _copiesController.text = '1';
-                        _copiesController.selection = TextSelection.collapsed(offset: 1);
+                        _copiesController.selection = TextSelection.collapsed(
+                          offset: 1,
+                        );
                         setState(() {});
                       }
                     },
@@ -179,7 +187,9 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                     setState(() {
                       _copies++;
                       _copiesController.text = _copies.toString();
-                      _copiesController.selection = TextSelection.collapsed(offset: _copiesController.text.length);
+                      _copiesController.selection = TextSelection.collapsed(
+                        offset: _copiesController.text.length,
+                      );
                     });
                   },
                 ),
@@ -196,14 +206,14 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 12,
+                ),
               ),
-              value: _paperSize,
+              initialValue: _paperSize,
               items: _paperSizes.map((String size) {
-                return DropdownMenuItem<String>(
-                  value: size,
-                  child: Text(size),
-                );
+                return DropdownMenuItem<String>(value: size, child: Text(size));
               }).toList(),
               onChanged: (String? newValue) {
                 if (newValue == null) return;
@@ -230,7 +240,9 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                   });
                 },
               ),
-              subtitle: Text(_isColor ? 'Color Printing' : 'Black and White (BnW)'),
+              subtitle: Text(
+                _isColor ? 'Color Printing' : 'Black and White (BnW)',
+              ),
               contentPadding: EdgeInsets.zero,
             ),
 
@@ -246,17 +258,35 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Cost per copy', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Cost per copy',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('PhP $_perCopyCost', style: const TextStyle(fontSize: 18)),
+                        Text(
+                          'PhP $_perCopyCost',
+                          style: const TextStyle(fontSize: 18),
+                        ),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('Total cost', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Total cost',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('PhP $_totalCost', style: const TextStyle(fontSize: 18)),
+                        Text(
+                          'PhP $_totalCost',
+                          style: const TextStyle(fontSize: 18),
+                        ),
                       ],
                     ),
                   ],
@@ -272,7 +302,10 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
                 icon: const Icon(Icons.print),
                 label: const Text('Confirm & Return'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 30,
+                    vertical: 15,
+                  ),
                   textStyle: const TextStyle(fontSize: 18),
                 ),
               ),

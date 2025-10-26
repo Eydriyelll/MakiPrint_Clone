@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/document.dart';
 import 'pages/printing_settings_page.dart';
 import 'pages/scan_qr_page.dart';
+import 'pages/tutorial_modal.dart';
 
 void main() {
   runApp(const MyApp());
@@ -22,7 +23,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
       home: const MyHomePage(title: 'MakiPrint'),
@@ -57,6 +57,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    showTutorialModal(context);
     _loadDocuments();
     _startExpiryTimer();
   }
@@ -70,17 +71,17 @@ class _MyHomePageState extends State<MyHomePage> {
   void _startExpiryTimer() {
     _expiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       bool hasExpired = false;
-      
+
       for (var doc in List.from(_documents)) {
         if (doc.isExpired) {
           _documents.remove(doc);
           hasExpired = true;
         }
       }
-      
+
       // Update UI every second for countdown timer
       setState(() {});
-      
+
       if (hasExpired) {
         _saveDocuments();
       }
@@ -142,22 +143,22 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: SafeArea(
-        
-        
         // this allows the rest of the screen to be scrollable
         child: SingleChildScrollView(
-          
-          
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              
               // Account Balance card pinned at top
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
                 child: Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
@@ -174,7 +175,8 @@ class _MyHomePageState extends State<MyHomePage> {
                             const SizedBox(height: 8),
                             Text(
                               'Php 0.00',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -184,7 +186,9 @@ class _MyHomePageState extends State<MyHomePage> {
                           icon: const Icon(Icons.add),
                           label: const Text('Top-up'),
                           style: ElevatedButton.styleFrom(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ],
@@ -205,155 +209,194 @@ class _MyHomePageState extends State<MyHomePage> {
                         child: Text('No documents uploaded yet.'),
                       )
                     : Column(
-                        children: _documents
-                            .asMap()
-                            .entries
-                            .map((entry) {
-                              final idx = entry.key;
-                              final doc = entry.value;
-                              return Card(
-                                margin: const EdgeInsets.symmetric(vertical: 8.0),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _documents.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final doc = entry.value;
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              doc.fileName,
-                                              style: Theme.of(context).textTheme.titleMedium,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete),
-                                            tooltip: 'Delete',
-                                            onPressed: () async {
-                                              final confirmed = await showDialog<bool>(
-                                                context: context,
-                                                builder: (ctx) => AlertDialog(
-                                                  title: const Text('Delete file'),
-                                                  content: const Text('Are you sure you want to delete this file?'),
-                                                  actions: [
-                                                    TextButton(
-                                                      onPressed: () => Navigator.of(ctx).pop(false),
-                                                      child: const Text('Cancel'),
-                                                    ),
-                                                    TextButton(
-                                                      onPressed: () => Navigator.of(ctx).pop(true),
-                                                      child: const Text('Delete'),
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                              if (!mounted) return;
-                                              if (confirmed == true) {
-                                                setState(() {
-                                                  _documents.removeAt(idx);
-                                                });
-                                                await _saveDocuments();
-                                              }
-                                            },
-                                          )
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          
-                                          Text(
-                                            'Php ${doc.printingCost.toStringAsFixed(2)}',
-                                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: Theme.of(context).colorScheme.primary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Expires in: ${doc.formattedTimeRemaining}',
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          color: doc.timeRemaining.inMinutes < 10 ? Colors.red : null,
-                                          fontWeight: doc.timeRemaining.inMinutes < 10 ? FontWeight.bold : null,
+                                      Expanded(
+                                        child: Text(
+                                          doc.fileName,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: ElevatedButton.icon(
-                                              onPressed: () async {
-                                                // Navigate to PrintingSettingsPage and wait for returned settings
-                                                final result = await Navigator.push<Map<String, dynamic>>(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => PrintingSettingsPage(
-                                                      initialCopies: _documents[idx].copies,
-                                                      initialPaperSize: _documents[idx].paperSize,
-                                                      initialIsColor: _documents[idx].isColor,
-                                                    ),
-                                                  ),
-                                                );
-
-                                                if (!mounted) return;
-
-                                                if (result != null) {
-                                                  setState(() {
-                                                    _documents[idx].copies = result['copies'] as int;
-                                                    _documents[idx].paperSize = result['paperSize'] as String;
-                                                    _documents[idx].isColor = result['isColor'] as bool;
-                                                    _documents[idx].printingCost = (result['totalCost'] as num).toDouble();
-                                                  });
-                                                  _saveDocuments(); // Save changes to persistent storage
-                                                }
-                                              },
-                                              icon: const Icon(Icons.settings),
-                                              label: const Text('Printing Settings'),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.green,
-                                                foregroundColor: Colors.white,
-                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete),
+                                        tooltip: 'Delete',
+                                        onPressed: () async {
+                                          final confirmed = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('Delete file'),
+                                              content: const Text(
+                                                'Are you sure you want to delete this file?',
                                               ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.of(
+                                                    ctx,
+                                                  ).pop(false),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                TextButton(
+                                                  onPressed: () => Navigator.of(
+                                                    ctx,
+                                                  ).pop(true),
+                                                  child: const Text('Delete'),
+                                                ),
+                                              ],
                                             ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: ElevatedButton.icon(
-                                              onPressed: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => const ScanQRPage(),
-                                                  ),
-                                                );
-                                              },
-                                              icon: const Icon(Icons.qr_code_scanner),
-                                              label: const Text('Print'),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.green,
-                                                foregroundColor: Colors.white,
-                                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                          );
+                                          if (!mounted) return;
+                                          if (confirmed == true) {
+                                            setState(() {
+                                              _documents.removeAt(idx);
+                                            });
+                                            await _saveDocuments();
+                                          }
+                                        },
                                       ),
                                     ],
                                   ),
-                                ),
-                              );
-                            })
-                            .toList(),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Php ${doc.printingCost.toStringAsFixed(2)}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Expires in: ${doc.formattedTimeRemaining}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color:
+                                              doc.timeRemaining.inMinutes < 10
+                                              ? Colors.red
+                                              : null,
+                                          fontWeight:
+                                              doc.timeRemaining.inMinutes < 10
+                                              ? FontWeight.bold
+                                              : null,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: () async {
+                                            // Navigate to PrintingSettingsPage and wait for returned settings
+                                            final result =
+                                                await Navigator.push<
+                                                  Map<String, dynamic>
+                                                >(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        PrintingSettingsPage(
+                                                          initialCopies:
+                                                              _documents[idx]
+                                                                  .copies,
+                                                          initialPaperSize:
+                                                              _documents[idx]
+                                                                  .paperSize,
+                                                          initialIsColor:
+                                                              _documents[idx]
+                                                                  .isColor,
+                                                        ),
+                                                  ),
+                                                );
+
+                                            if (!mounted) return;
+
+                                            if (result != null) {
+                                              setState(() {
+                                                _documents[idx].copies =
+                                                    result['copies'] as int;
+                                                _documents[idx].paperSize =
+                                                    result['paperSize']
+                                                        as String;
+                                                _documents[idx].isColor =
+                                                    result['isColor'] as bool;
+                                                _documents[idx].printingCost =
+                                                    (result['totalCost'] as num)
+                                                        .toDouble();
+                                              });
+                                              _saveDocuments(); // Save changes to persistent storage
+                                            }
+                                          },
+                                          icon: const Icon(Icons.settings),
+                                          label: const Text(
+                                            'Printing Settings',
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.green,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    const ScanQRPage(),
+                                              ),
+                                            );
+                                          },
+                                          icon: const Icon(
+                                            Icons.qr_code_scanner,
+                                          ),
+                                          label: const Text('Print'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.green,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
                       ),
               ),
-
-
-
-
             ],
           ),
         ),
@@ -371,9 +414,7 @@ class _MyHomePageState extends State<MyHomePage> {
               barrierDismissible: false,
               builder: (BuildContext context) => WillPopScope(
                 onWillPop: () async => false,
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const Center(child: CircularProgressIndicator()),
               ),
             );
           }
@@ -395,35 +436,38 @@ class _MyHomePageState extends State<MyHomePage> {
 
             if (!mounted) return;
 
-              if (result != null && result.files.isNotEmpty) {
-                showLoadingIndicator();
-                
-                final file = result.files.single;
-                
-                // Validate file size (max 10MB for mobile optimization)
-                if (file.size > 10 * 1024 * 1024) {
-                  hideLoadingIndicator();
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('File too large. Maximum size is 10MB.')),
-                  );
-                  return;
-                }
+            if (result != null && result.files.isNotEmpty) {
+              showLoadingIndicator();
 
-                // Add a small delay to show loading indicator
-                await Future.delayed(const Duration(milliseconds: 500));
+              final file = result.files.single;
 
-                final newDoc = Document(
-                  fileName: file.name,
-                  copies: 1, // Default values
-                  paperSize: 'A4',
-                  isColor: true,
+              // Validate file size (max 10MB for mobile optimization)
+              if (file.size > 10 * 1024 * 1024) {
+                hideLoadingIndicator();
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('File too large. Maximum size is 10MB.'),
+                  ),
                 );
+                return;
+              }
 
-                setState(() {
-                  _documents.add(newDoc);
-                });
-                await _saveDocuments();              hideLoadingIndicator();
-              
+              // Add a small delay to show loading indicator
+              await Future.delayed(const Duration(milliseconds: 500));
+
+              final newDoc = Document(
+                fileName: file.name,
+                copies: 1, // Default values
+                paperSize: 'A4',
+                isColor: true,
+              );
+
+              setState(() {
+                _documents.add(newDoc);
+              });
+              await _saveDocuments();
+              hideLoadingIndicator();
+
               messenger.showSnackBar(
                 const SnackBar(content: Text('File uploaded successfully')),
               );
