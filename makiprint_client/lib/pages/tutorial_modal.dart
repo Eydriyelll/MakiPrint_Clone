@@ -54,7 +54,7 @@ class _TutorialDialogContent extends StatefulWidget {
 class _TutorialDialogContentState extends State<_TutorialDialogContent> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final int _totalPages = 3;
+  final int _totalPages = 5;
 
   @override
   void initState() {
@@ -136,23 +136,39 @@ class _TutorialDialogContentState extends State<_TutorialDialogContent> {
               children: <Widget>[
                 // Carousel Item 1
                 _buildTutorialPage(
-                  title: 'Step 1: Discover Features',
+                  title: 'Welcome To MakiPrint',
                   description:
-                      'Easily navigate through the app using the bottom bar. Tap on the icons to see what each section offers.',
+                      'Welcome to MakiPrint! Your journey to seamless printing starts here. Let\'s get you familiar with the app.',
                   imagePlaceholder: Icons.rocket_launch,
                 ),
                 // Carousel Item 2
                 _buildTutorialPage(
-                  title: 'Step 2: Start a Project',
+                  title: 'Upload a File',
                   description:
-                      'Tap the "+" button to begin your first project. All your creations will be saved locally and securely.',
+                      'Tap the "+" button to select the file you would like to print from your phone.',
                   imagePlaceholder: Icons.add_circle_outline,
                 ),
                 // Carousel Item 3
                 _buildTutorialPage(
-                  title: 'Step 3: Personalize Settings',
+                  title: 'Modify Printing Settings',
                   description:
-                      'Go to the profile tab to change your preferences, themes, and manage your account details.',
+                      'Before printing, you can adjust settings like color mode, number of copies, and paper size. Price of the document will update accordingly.',
+                  imagePlaceholder: Icons.settings,
+                ),
+
+                // Carousel Item 4
+                _buildTutorialPage(
+                  title: 'Scan QR',
+                  description:
+                      'When you are ready to print, scan the MakiPrint QR Code on the printer.',
+                  imagePlaceholder: Icons.settings,
+                ),
+
+                // Carousel Item 5
+                _buildTutorialPage(
+                  title: 'Wait for the Document',
+                  description:
+                      'That\'s it! Your document will be printed immediately. ',
                   imagePlaceholder: Icons.settings,
                 ),
               ],
