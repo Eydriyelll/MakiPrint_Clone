@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ScanQRPage extends StatefulWidget {
   const ScanQRPage({super.key});
@@ -10,60 +10,41 @@ class ScanQRPage extends StatefulWidget {
 }
 
 class _ScanQRPageState extends State<ScanQRPage> {
-  late MobileScannerController cameraController;
-  bool _isCameraInitialized = false;
-  bool _hasError = false;
-  String _errorMessage = '';
-  String? _lastScanned; // For "Last Scanned" section
+  String? _lastScanned;
+  final List<String> _scanHistory = [];
+  bool _isProcessing = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeCamera();
-  }
+  void _onDetect(BarcodeCapture capture) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
 
-  Future<void> _initializeCamera() async {
-    try {
-      cameraController = MobileScannerController(
-        facing: CameraFacing.back,
-        formats: [BarcodeFormat.qrCode],
-        autoStart: true,
-        torchEnabled: false,
-      );
+    final barcodes = capture.barcodes;
+    if (barcodes.isNotEmpty) {
+      final value = barcodes.first.rawValue ?? 'Unknown QR';
 
-      await cameraController.start();
+      setState(() {
+        _lastScanned = value;
+        if (!_scanHistory.contains(value)) {
+          _scanHistory.insert(0, value);
+          if (_scanHistory.length > 10) _scanHistory.removeLast();
+        }
+      });
 
-      if (mounted) {
-        setState(() {
-          _isCameraInitialized = true;
-          _hasError = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _errorMessage = kIsWeb
-              ? 'Camera access denied. Please allow camera access in your browser settings.'
-              : 'Failed to initialize camera. Please check camera permissions.';
-        });
+      // Try to launch if it's a URL
+      if (Uri.tryParse(value)?.hasAbsolutePath ?? false) {
+        final uri = Uri.parse(value);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          _showDetectedAlert(value);
+        }
+      } else {
+        _showDetectedAlert(value);
       }
     }
-  }
 
-  @override
-  void dispose() {
-    cameraController.dispose();
-    super.dispose();
-  }
-
-  void _retryCamera() {
-    setState(() {
-      _hasError = false;
-      _errorMessage = '';
-      _isCameraInitialized = false;
-    });
-    _initializeCamera();
+    await Future.delayed(const Duration(seconds: 2));
+    _isProcessing = false;
   }
 
   @override
@@ -78,186 +59,172 @@ class _ScanQRPageState extends State<ScanQRPage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        actions: [
-          if (!kIsWeb && _isCameraInitialized)
-            IconButton(
-              icon: const Icon(Icons.flash_on),
-              onPressed: () => cameraController.toggleTorch(),
-              tooltip: 'Toggle Flash',
-            ),
-          if (_isCameraInitialized)
-            IconButton(
-              icon: const Icon(Icons.cameraswitch),
-              onPressed: () => cameraController.switchCamera(),
-              tooltip: 'Switch Camera',
-            ),
-        ],
       ),
-      body: _buildScannerBody(primaryColor),
-    );
-  }
-
-  // Main body containing How to Scan, Last Scanned, Camera/Error, Footer
-  Widget _buildScannerBody(Color primaryColor) {
-    return Column(
-      children: [
-        // ====== HOW TO SCAN SECTION ======
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              Column(
-                children: [
-                  Icon(Icons.smartphone, size: 36, color: primaryColor),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Hold your phone steady',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-              Column(
-                children: [
-                  Icon(Icons.qr_code_scanner, size: 36, color: primaryColor),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Align QR inside frame',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        // ====== LAST SCANNED SECTION ======
-        if (_lastScanned != null)
+      body: Column(
+        children: [
+          // ===== HOW TO SCAN SECTION =====
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 8.0,
-            ),
-            child: Card(
-              color: primaryColor.withOpacity(0.1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Row(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Column(
                   children: [
-                    const Icon(Icons.history, color: Colors.black54),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Last scanned: $_lastScanned',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
+                    Icon(Icons.smartphone, size: 36, color: primaryColor),
+                    const SizedBox(height: 8),
+                    const Text('Hold your phone steady'),
                   ],
                 ),
-              ),
-            ),
-          ),
-
-        // ====== CAMERA / ERROR AREA ======
-        Expanded(
-          child: _hasError
-              ? _buildCameraErrorWidget(primaryColor)
-              : _isCameraInitialized
-              ? MobileScanner(
-                  controller: cameraController,
-                  onDetect: (capture) {
-                    final List<Barcode> barcodes = capture.barcodes;
-                    for (final barcode in barcodes) {
-                      if (!mounted || barcode.rawValue == null) continue;
-
-                      // Save last scanned value
-                      setState(() {
-                        _lastScanned = barcode.rawValue;
-                      });
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'QR Code detected: ${barcode.rawValue}',
-                          ),
-                          duration: const Duration(seconds: 2),
-                          backgroundColor: primaryColor,
-                        ),
-                      );
-
-                      Navigator.of(context).pop(barcode.rawValue);
-                      break;
-                    }
-                  },
-                )
-              : Center(child: CircularProgressIndicator(color: primaryColor)),
-        ),
-
-        // ====== FOOTER INSTRUCTIONS ======
-        Container(
-          color: Theme.of(context).colorScheme.surface,
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Text(
-                'Position the QR code within the frame to scan',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: primaryColor,
-                  fontWeight: FontWeight.w500,
+                Column(
+                  children: [
+                    Icon(Icons.qr_code_scanner, size: 36, color: primaryColor),
+                    const SizedBox(height: 8),
+                    const Text('Align QR inside frame'),
+                  ],
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                kIsWeb
-                    ? 'Make sure your browser has camera permissions enabled'
-                    : 'Ensure good lighting for better scanning',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
-    );
-  }
 
-  // Camera error widget only replaces scanner area
-  Widget _buildCameraErrorWidget(Color primaryColor) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 16),
-            Text('Camera Error', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              _errorMessage,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+          // ===== QR SCANNER SECTION =====
+          Expanded(
+            flex: 3,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: MobileScanner(
+                      fit: BoxFit.cover,
+                      onDetect: _onDetect,
+                    ),
+                  ),
+                ),
+                // Animated scanning line
+                Positioned.fill(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(seconds: 2),
+                    curve: Curves.easeInOut,
+                    builder: (context, value, child) {
+                      return CustomPaint(
+                        painter: _ScannerOverlayPainter(value),
+                      );
+                    },
+                    onEnd: () => setState(() {}),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _retryCamera,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
+          ),
+
+          const SizedBox(height: 12),
+
+          // ===== SCAN HISTORY SECTION =====
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Scan History',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: _scanHistory.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'No scans yet — scan a QR to get started!',
+                                  style: TextStyle(color: Colors.grey),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: _scanHistory.length,
+                                itemBuilder: (context, index) {
+                                  final item = _scanHistory[index];
+                                  return ListTile(
+                                    leading: const Icon(Icons.history),
+                                    title: Text(
+                                      item,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onTap: () async {
+                                      final uri = Uri.tryParse(item);
+                                      if (uri != null &&
+                                          await canLaunchUrl(uri)) {
+                                        await launchUrl(
+                                          uri,
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                      }
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: const Text('Retry'),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
+  void _showDetectedAlert(String value) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('QR Code Detected'),
+        content: Text(value),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ===== Overlay Painter for Scan Animation =====
+class _ScannerOverlayPainter extends CustomPainter {
+  final double animationValue;
+  _ScannerOverlayPainter(this.animationValue);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.redAccent.withOpacity(0.8)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+
+    final lineY = size.height * animationValue;
+    canvas.drawLine(Offset(0, lineY), Offset(size.width, lineY), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) =>
+      oldDelegate.animationValue != animationValue;
 }
