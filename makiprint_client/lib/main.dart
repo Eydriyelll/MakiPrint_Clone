@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:archive/archive.dart';
+import 'package:xml/xml.dart' as xml;
 
 import 'models/document.dart';
 import 'pages/printing_settings_page.dart';
@@ -57,7 +59,11 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    showTutorialModal(context);
+    try {
+      showTutorialModal(context);
+    } catch (e) {
+      print('Error showing tutorial: $e');
+    }
     _loadDocuments();
     _startExpiryTimer();
   }
@@ -224,12 +230,25 @@ class _MyHomePageState extends State<MyHomePage> {
                                         MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
-                                        child: Text(
-                                          doc.fileName,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.titleMedium,
-                                          overflow: TextOverflow.ellipsis,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              doc.fileName,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Pages: ${doc.pageCount}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
+                                            ),
+                                          ],
                                         ),
                                       ),
                                       IconButton(
@@ -328,6 +347,9 @@ class _MyHomePageState extends State<MyHomePage> {
                                                           initialIsColor:
                                                               _documents[idx]
                                                                   .isColor,
+                                                          pageCount:
+                                                              _documents[idx]
+                                                                  .pageCount,
                                                         ),
                                                   ),
                                                 );
@@ -455,11 +477,32 @@ class _MyHomePageState extends State<MyHomePage> {
               // Add a small delay to show loading indicator
               await Future.delayed(const Duration(milliseconds: 500));
 
+              // Read page count based on file type
+              int pageCount = 1;
+              try {
+                final fileName = file.name.toLowerCase();
+                final fileBytes = file.bytes;
+                
+                if (fileBytes != null) {
+                  if (fileName.endsWith('.pdf')) {
+                    pageCount = await _getPageCountPDF(fileBytes);
+                  } else if (fileName.endsWith('.docx')) {
+                    pageCount = await _getPageCountDOCX(fileBytes);
+                  } else if (fileName.endsWith('.doc')) {
+                    pageCount = await _getPageCountDOC(fileBytes);
+                  }
+                }
+              } catch (e) {
+                print('Error reading page count: $e');
+                pageCount = 1;
+              }
+
               final newDoc = Document(
                 fileName: file.name,
                 copies: 1, // Default values
                 paperSize: 'A4',
                 isColor: true,
+                pageCount: pageCount,
               );
 
               setState(() {
@@ -469,7 +512,7 @@ class _MyHomePageState extends State<MyHomePage> {
               hideLoadingIndicator();
 
               messenger.showSnackBar(
-                const SnackBar(content: Text('File uploaded successfully')),
+                SnackBar(content: Text('File uploaded successfully - $pageCount pages detected')),
               );
             }
           } catch (e) {
@@ -489,5 +532,124 @@ class _MyHomePageState extends State<MyHomePage> {
         icon: const Icon(Icons.add),
       ),
     );
+  }
+
+  // Get page count from PDF file
+  Future<int> _getPageCountPDF(List<int> fileBytes) async {
+    try {
+      if (fileBytes.isEmpty) return 1;
+      
+      // Parse PDF to find page count more accurately
+      String pdfString = utf8.decode(fileBytes, allowMalformed: true);
+      
+      // Count /Type /Page patterns (but filter duplicates from object definitions)
+      // More precise: look for page dictionary entries
+      int pageCount = 0;
+      final pagePattern = RegExp(r'/Type\s*/Page(?!s)');
+      pageCount = pagePattern.allMatches(pdfString).length;
+      
+      if (pageCount > 0) {
+        print('PDF page count (from content): $pageCount');
+        return pageCount;
+      }
+      
+      // Fallback: use conservative file size heuristic
+      // Each page in a typical PDF is approximately 5000-6000 bytes
+      final estimatedPages = (fileBytes.length / 5500).ceil();
+      print('PDF page count (estimated from size): $estimatedPages');
+      return estimatedPages > 0 ? estimatedPages : 1;
+    } catch (e) {
+      print('Error reading PDF: $e');
+      return 1;
+    }
+  }
+
+  // Get page count from DOCX file
+  Future<int> _getPageCountDOCX(List<int> fileBytes) async {
+    try {
+      if (fileBytes.isEmpty) return 1;
+      
+      // DOCX is a ZIP file, extract the document.xml to count pages
+      final archive = ZipDecoder().decodeBytes(fileBytes);
+      
+      // Find and read document.xml
+      for (var file in archive) {
+        if (file.name == 'word/document.xml' && file.content is List<int>) {
+          try {
+            final xmlContent = String.fromCharCodes(file.content as List<int>);
+            final document = xml.XmlDocument.parse(xmlContent);
+            
+            // First, try to find page breaks (w:br with w:type="page")
+            final pageBreaks = xmlContent.contains('w:type="page"')
+                ? xmlContent.split('w:type="page"').length - 1
+                : 0;
+            
+            if (pageBreaks > 0) {
+              int pageCount = pageBreaks + 1; // Add 1 for the last page
+              print('DOCX page count (from page breaks): $pageCount');
+              return pageCount;
+            }
+            
+            // Alternative: count paragraphs
+            final paragraphs = document.findAllElements('w:p');
+            int paragraphCount = paragraphs.length;
+            
+            // More conservative estimation: 55-60 paragraphs per page for typical documents
+            // Most documents have around 250-300 words per page, which is roughly 50-60 short paragraphs
+            int estimationDivisor = 60;
+            if (xmlContent.contains('w:tbl')) {
+              // If document has tables, they take more space but fewer paragraphs
+              estimationDivisor = 50;
+            }
+            
+            int pageCount = (paragraphCount / estimationDivisor).ceil();
+            print('DOCX page count (from paragraphs): $pageCount (paragraphs: $paragraphCount)');
+            return pageCount > 0 ? pageCount : 1;
+          } catch (e) {
+            print('Error parsing DOCX XML: $e');
+            return 1;
+          }
+        }
+      }
+      
+      return 1;
+    } catch (e) {
+      print('Error reading DOCX: $e');
+      return 1;
+    }
+  }
+
+  // Get page count from DOC file
+  Future<int> _getPageCountDOC(List<int> fileBytes) async {
+    try {
+      if (fileBytes.isEmpty) return 1;
+      
+      // DOC files are binary; use improved heuristics
+      // Try to find page break indicators in the binary data
+      int pageBreakCount = 0;
+      
+      // Common page break signatures in DOC format
+      // 0x0C is the form feed character often used for page breaks
+      for (int i = 0; i < fileBytes.length; i++) {
+        if (fileBytes[i] == 0x0C) {
+          pageBreakCount++;
+        }
+      }
+      
+      if (pageBreakCount > 0) {
+        int pageCount = pageBreakCount + 1; // +1 for the first page
+        print('DOC page count (from page breaks): $pageCount');
+        return pageCount;
+      }
+      
+      // Fallback: use more conservative file size heuristic
+      // Typical DOC file has 5000-6000 bytes per page
+      final estimatedPages = (fileBytes.length / 5500).ceil();
+      print('DOC page count (estimated from size): $estimatedPages');
+      return estimatedPages > 0 ? estimatedPages : 1;
+    } catch (e) {
+      print('Error reading DOC: $e');
+      return 1;
+    }
   }
 }

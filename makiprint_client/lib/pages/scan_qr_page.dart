@@ -10,7 +10,6 @@ class ScanQRPage extends StatefulWidget {
 }
 
 class _ScanQRPageState extends State<ScanQRPage> {
-  String? _lastScanned;
   final List<String> _scanHistory = [];
   bool _isProcessing = false;
 
@@ -23,7 +22,6 @@ class _ScanQRPageState extends State<ScanQRPage> {
       final value = barcodes.first.rawValue ?? 'Unknown QR';
 
       setState(() {
-        _lastScanned = value;
         if (!_scanHistory.contains(value)) {
           _scanHistory.insert(0, value);
           if (_scanHistory.length > 10) _scanHistory.removeLast();

@@ -8,6 +8,7 @@ class Document {
   int copies;
   String paperSize;
   bool isColor;
+  int pageCount;
   
   final DateTime uploadTime;
   final DateTime expiryTime;
@@ -18,6 +19,7 @@ class Document {
     this.copies = 1,
     this.paperSize = 'A4',
     this.isColor = true,
+    this.pageCount = 1,
     DateTime? uploadTime,
   }) : _printingCost = printingCost,
        uploadTime = uploadTime ?? DateTime.now(),
@@ -29,6 +31,7 @@ class Document {
         'copies': copies,
         'paperSize': paperSize,
         'isColor': isColor,
+        'pageCount': pageCount,
         'uploadTime': uploadTime.toIso8601String(),
         'expiryTime': expiryTime.toIso8601String(),
       };
@@ -39,6 +42,7 @@ class Document {
         copies: (json['copies'] as num?)?.toInt() ?? 1,
         paperSize: json['paperSize'] as String? ?? 'A4',
         isColor: json['isColor'] as bool? ?? true,
+        pageCount: (json['pageCount'] as num?)?.toInt() ?? 1,
         uploadTime: DateTime.parse(json['uploadTime']),
       );
 

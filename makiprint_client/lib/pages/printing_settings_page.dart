@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // added
+import 'package:flutter/services.dart';
 
 /// PrintingSettingsPage
 /// - No main() here (app entry is in main.dart)
@@ -8,12 +8,14 @@ class PrintingSettingsPage extends StatefulWidget {
   final int initialCopies;
   final String initialPaperSize;
   final bool initialIsColor;
+  final int pageCount;
 
   const PrintingSettingsPage({
     super.key,
     this.initialCopies = 1,
     this.initialPaperSize = 'A4',
     this.initialIsColor = true,
+    this.pageCount = 1,
   });
 
   @override
@@ -82,7 +84,7 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
   // Computed costs
   int get _perCopyCost =>
       (_baseCosts[_paperSize] ?? 0) + (_isColor ? _colorExtra : 0);
-  int get _totalCost => _perCopyCost * _copies;
+  int get _totalCost => _perCopyCost * _copies * widget.pageCount;
 
   // Build a result map to return to the caller
   Map<String, Object> get _resultMap => {
@@ -252,40 +254,114 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
               margin: EdgeInsets.zero,
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Total Pages Display
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'Cost per copy',
+                          'Total Pages',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 4),
                         Text(
-                          'PhP $_perCopyCost',
-                          style: const TextStyle(fontSize: 18),
+                          '${widget.pageCount}',
+                          style: const TextStyle(fontSize: 16),
                         ),
                       ],
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text(
-                          'Total cost',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                    const SizedBox(height: 16),
+
+                    // Cost Breakdown
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Cost Calculation:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[700],
+                            ),
                           ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'PhP $_perCopyCost/page × ${widget.pageCount} pages × $_copies copies = PhP $_totalCost',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Cost per unit breakdown
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Cost per page',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'PhP $_perCopyCost',
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'PhP $_totalCost',
-                          style: const TextStyle(fontSize: 18),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Pages × Copies',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${widget.pageCount} × $_copies',
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text(
+                              'Total cost',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'PhP $_totalCost',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
