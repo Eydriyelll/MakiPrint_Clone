@@ -9,6 +9,9 @@ class Document {
   String paperSize;
   bool isColor;
   int pageCount;
+  // optional: store first page width/height in PDF points (72 pts = 1 inch)
+  double? pageWidthPts;
+  double? pageHeightPts;
   
   final DateTime uploadTime;
   final DateTime expiryTime;
@@ -20,6 +23,8 @@ class Document {
     this.paperSize = 'A4',
     this.isColor = true,
     this.pageCount = 1,
+    this.pageWidthPts,
+    this.pageHeightPts,
     DateTime? uploadTime,
   }) : _printingCost = printingCost,
        uploadTime = uploadTime ?? DateTime.now(),
@@ -32,6 +37,8 @@ class Document {
         'paperSize': paperSize,
         'isColor': isColor,
         'pageCount': pageCount,
+      'pageWidthPts': pageWidthPts,
+      'pageHeightPts': pageHeightPts,
         'uploadTime': uploadTime.toIso8601String(),
         'expiryTime': expiryTime.toIso8601String(),
       };
@@ -42,8 +49,10 @@ class Document {
         copies: (json['copies'] as num?)?.toInt() ?? 1,
         paperSize: json['paperSize'] as String? ?? 'A4',
         isColor: json['isColor'] as bool? ?? true,
-        pageCount: (json['pageCount'] as num?)?.toInt() ?? 1,
-        uploadTime: DateTime.parse(json['uploadTime']),
+      pageCount: (json['pageCount'] as num?)?.toInt() ?? 1,
+      pageWidthPts: (json['pageWidthPts'] as num?)?.toDouble(),
+      pageHeightPts: (json['pageHeightPts'] as num?)?.toDouble(),
+      uploadTime: DateTime.parse(json['uploadTime']),
       );
 
   bool get isExpired => DateTime.now().isAfter(expiryTime);

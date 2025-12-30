@@ -9,6 +9,9 @@ class PrintingSettingsPage extends StatefulWidget {
   final String initialPaperSize;
   final bool initialIsColor;
   final int pageCount;
+  // Optional: first page size in PDF points (72 points = 1 inch).
+  // If provided, the page dimensions are used to auto-detect paper size.
+  final Size? initialPageSizePts;
 
   const PrintingSettingsPage({
     super.key,
@@ -16,6 +19,7 @@ class PrintingSettingsPage extends StatefulWidget {
     this.initialPaperSize = 'A4',
     this.initialIsColor = true,
     this.pageCount = 1,
+    this.initialPageSizePts,
   });
 
   @override
@@ -33,14 +37,17 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
   late final FocusNode _copiesFocusNode;
 
   // Options for the paper size dropdown (labels must match cost map keys)
-  final List<String> _paperSizes = ['A4', 'Letter', 'Legal', 'A5'];
+  final List<String> _paperSizes = [
+    'A4',
+    'Short Bond Paper',
+    'Long Bond Paper',
+  ];
 
   // Base costs per paper size (per copy) — updated to match your requested values
   final Map<String, int> _baseCosts = {
     'A4': 1,
-    'Letter': 2,
-    'Legal': 3,
-    'A5': 4,
+    'Short Bond Paper': 2,
+    'Long Bond Paper': 3,
   };
 
   // Cost additions
@@ -72,6 +79,35 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
         setState(() {});
       }
     });
+
+    // If caller provided the first page dimensions, detect paper size immediately
+    if (widget.initialPageSizePts != null) {
+      final detected = _detectPaperSizeFromPoints(widget.initialPageSizePts!);
+      if (detected != null) {
+        _paperSize = detected;
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant PrintingSettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If page count or first-page size changed in the parent, update displayed values
+    if (oldWidget.pageCount != widget.pageCount) {
+      setState(() {
+        // just trigger rebuild to refresh derived calculations
+      });
+    }
+
+    if (oldWidget.initialPageSizePts != widget.initialPageSizePts &&
+        widget.initialPageSizePts != null) {
+      final detected = _detectPaperSizeFromPoints(widget.initialPageSizePts!);
+      if (detected != null && detected != _paperSize) {
+        setState(() {
+          _paperSize = detected;
+        });
+      }
+    }
   }
 
   @override
@@ -85,6 +121,43 @@ class _PrintingSettingsPageState extends State<PrintingSettingsPage> {
   int get _perCopyCost =>
       (_baseCosts[_paperSize] ?? 0) + (_isColor ? _colorExtra : 0);
   int get _totalCost => _perCopyCost * _copies * widget.pageCount;
+
+  // Attempts to detect a paper size name from a page Size in points (72 pts = 1 inch).
+  // Returns the matching key from _paperSizes/_baseCosts or null if no good match.
+  String? _detectPaperSizeFromPoints(Size pts) {
+    const double ptsPerInch = 72.0;
+    final double wIn = pts.width / ptsPerInch;
+    final double hIn = pts.height / ptsPerInch;
+
+    // Normalize so width <= height (portrait)
+    final double w = wIn < hIn ? wIn : hIn;
+    final double h = hIn > wIn ? hIn : wIn;
+
+    final Map<String, Size> standardsInches = {
+      'A4': const Size(8.27, 11.69),
+      'Short Bond Paper': const Size(8.5, 11.0),
+      'Long Bond Paper': const Size(8.5, 13.0),
+    };
+
+    String? bestKey;
+    double bestError = double.infinity;
+
+    standardsInches.forEach((key, sz) {
+      final double sw = sz.width < sz.height ? sz.width : sz.height;
+      final double sh = sz.height > sz.width ? sz.height : sz.width;
+      final double err = (sw - w).abs() + (sh - h).abs();
+      if (err < bestError) {
+        bestError = err;
+        bestKey = key;
+      }
+    });
+
+    // Accept match only if error is reasonably small (0.8 inch total)
+    if (bestError != double.infinity && bestError <= 0.8) {
+      return bestKey;
+    }
+    return null;
+  }
 
   // Build a result map to return to the caller
   Map<String, Object> get _resultMap => {
