@@ -8,6 +8,7 @@ import 'package:archive/archive.dart';
 import 'package:xml/xml.dart' as xml;
 
 import 'models/document.dart';
+import 'pages/home.dart';
 import 'pages/printing_settings_page.dart';
 import 'pages/scan_qr_page.dart';
 import 'pages/tutorial_modal.dart';
@@ -23,11 +24,16 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'MakiPrint',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
-      home: const MyHomePage(title: 'MakiPrint'),
+      initialRoute: '/home',
+      routes: {
+        '/home': (context) => const HomePage(),
+        '/app': (context) => const MyHomePage(title: 'MakiPrint'),
+        '/print': (context) => const MyHomePage(title: 'MakiPrint'),
+      },
     );
   }
 }
