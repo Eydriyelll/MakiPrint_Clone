@@ -41,9 +41,12 @@ dependencies:
   url_launcher: ^6.3.2
   archive: ^3.4.0
   xml: ^6.3.0
+  webview_flutter: ^4.13.0
+  webview_flutter_web: ^0.2.3+4
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_widget_from_html: ^0.15.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

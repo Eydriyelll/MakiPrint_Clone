@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/navbar.dart';
+import '../widgets/footer.dart';
+import 'printing_settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -10,28 +14,39 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late PageController _carouselController;
   int _currentCarouselIndex = 0;
+  Timer? _carouselTimer;
 
   @override
   void initState() {
     super.initState();
     _carouselController = PageController(initialPage: 0);
-    _startCarouselAutoScroll();
+    _startCarouselTimer();
   }
 
-  void _startCarouselAutoScroll() {
-    Future.delayed(const Duration(seconds: 15), () {
-      if (mounted && _carouselController.hasClients) {
+  void _startCarouselTimer() {
+    // Auto-advance every 5 seconds. When at the last item, jump back to first.
+    _carouselTimer?.cancel();
+    _carouselTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_carouselController.hasClients) return;
+      final itemCount = _getCarouselItems(true).length; // any value; length is static
+      if (_currentCarouselIndex >= itemCount - 1) {
+        _carouselController.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeInOut,
+        );
+      } else {
         _carouselController.nextPage(
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeInOut,
         );
-        _startCarouselAutoScroll();
       }
     });
   }
 
   @override
   void dispose() {
+    _carouselTimer?.cancel();
     _carouselController.dispose();
     super.dispose();
   }
@@ -41,6 +56,39 @@ class _HomePageState extends State<HomePage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Navigating to $section section')));
+  }
+
+  List<_CarouselItem> _getCarouselItems(bool isMobile) {
+    // Make the original third item the first in order
+    return [
+      _CarouselItem(
+        title: 'Print Anything, Anytime—No USB, No Hassle',
+        subtitle:
+            'Just a QR code and your phone. No USB drives, no email attachments, no waiting. Print retail services at your fingertips in seconds.',
+        buttonText: 'Print a Document Now',
+        buttonAction: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PrintingSettingsPage()),
+        ),
+        iconPlaceholder: Icons.qr_code,
+      ),
+      _CarouselItem(
+        title: 'Make Your Home Printer Print Money for You',
+        subtitle:
+            'Turn your idle printer into a passive income stream. Accept printing jobs from your community with MakiPrint and earn while you sleep.',
+        buttonText: 'Start Your Small Printing Business',
+        buttonAction: () => _scrollToSection('Home Printer'),
+        iconPlaceholder: Icons.home_repair_service,
+      ),
+      _CarouselItem(
+        title: 'Make Your Printing Service Autonomous',
+        subtitle:
+            'Automate pricing, payment collection, and job management. Perfect for printing shops and school bookstores looking to scale without hiring.',
+        buttonText: 'Book a Demo',
+        buttonAction: () => _scrollToSection('Book Demo'),
+        iconPlaceholder: Icons.business,
+      ),
+    ];
   }
 
   @override
@@ -81,92 +129,20 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Navbar Widget
+  // Navbar Widget (now delegated to separate widget)
   Widget _buildNavbar(BuildContext context, bool isMobile) {
-    return Container(
-      color: Colors.white,
-      padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 16 : 32,
-        vertical: 16,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Logo
-          Text(
-            'MakiPrint',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.green,
-            ),
-          ),
-
-          // Desktop Navigation Menu
-          if (!isMobile)
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () => _scrollToSection('About Us'),
-                  child: const Text('About us'),
-                ),
-                const SizedBox(width: 16),
-                TextButton(
-                  onPressed: () => _scrollToSection('Request a Demo'),
-                  child: const Text('Request a Demo'),
-                ),
-              ],
-            ),
-
-          // Mobile: Print a Document button, Desktop: Print a Document button
-          ElevatedButton(
-            onPressed: () {
-              // Navigate to printing app
-              Navigator.pushNamed(context, '/print');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Print a Document'),
-          ),
-        ],
-      ),
-    );
+    return NavbarWidget(isMobile: isMobile);
   }
 
   // Hero Carousel Widget
   Widget _buildHeroCarousel(BuildContext context, bool isMobile) {
-    final carouselItems = [
-      _CarouselItem(
-        title: 'Make Your Home Printer Print Money for You',
-        subtitle:
-            'Turn your idle printer into a passive income stream. Accept printing jobs from your community with MakiPrint and earn while you sleep.',
-        buttonText: 'Start Your Small Printing Business',
-        buttonAction: () => _scrollToSection('Home Printer'),
-        iconPlaceholder: Icons.home_repair_service,
-      ),
-      _CarouselItem(
-        title: 'Make Your Printing Service Autonomous',
-        subtitle:
-            'Automate pricing, payment collection, and job management. Perfect for printing shops and school bookstores looking to scale without hiring.',
-        buttonText: 'Book a Demo',
-        buttonAction: () => _scrollToSection('Book Demo'),
-        iconPlaceholder: Icons.business,
-      ),
-      _CarouselItem(
-        title: 'Print Anything, Anytime—No USB, No Hassle',
-        subtitle:
-            'Just a QR code and your phone. No USB drives, no email attachments, no waiting. Print retail services at your fingertips in seconds.',
-        buttonText: 'Print a Document Now',
-        buttonAction: () => Navigator.pushNamed(context, '/print'),
-        iconPlaceholder: Icons.qr_code,
-      ),
-    ];
+    final carouselItems = _getCarouselItems(isMobile);
 
     return Container(
       height: isMobile ? 500 : 600,
       color: Colors.grey[100],
       child: Stack(
+        alignment: Alignment.center,
         children: [
           PageView(
             controller: _carouselController,
@@ -179,6 +155,43 @@ class _HomePageState extends State<HomePage> {
                 .map((item) => _buildCarouselCard(context, item, isMobile))
                 .toList(),
           ),
+
+          // Prev button
+          Positioned(
+            left: 12,
+            child: IconButton(
+              icon: const Icon(Icons.chevron_left, size: 40),
+              onPressed: () {
+                if (!_carouselController.hasClients) return;
+                final prev = (_currentCarouselIndex - 1) < 0
+                    ? carouselItems.length - 1
+                    : _currentCarouselIndex - 1;
+                _carouselController.animateToPage(
+                  prev,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                );
+              },
+            ),
+          ),
+
+          // Next button
+          Positioned(
+            right: 12,
+            child: IconButton(
+              icon: const Icon(Icons.chevron_right, size: 40),
+              onPressed: () {
+                if (!_carouselController.hasClients) return;
+                final next = (_currentCarouselIndex + 1) % carouselItems.length;
+                _carouselController.animateToPage(
+                  next,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOut,
+                );
+              },
+            ),
+          ),
+
           // Carousel Indicators
           Positioned(
             bottom: 20,
@@ -188,15 +201,25 @@ class _HomePageState extends State<HomePage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
                 carouselItems.length,
-                (index) => Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: _currentCarouselIndex == index ? 12 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _currentCarouselIndex == index
-                        ? Colors.green
-                        : Colors.grey,
+                (index) => GestureDetector(
+                  onTap: () {
+                    if (!_carouselController.hasClients) return;
+                    _carouselController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentCarouselIndex == index ? 12 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentCarouselIndex == index
+                          ? Colors.green
+                          : Colors.grey,
+                    ),
                   ),
                 ),
               ),
@@ -630,149 +653,11 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Footer Widget
+  // Footer Widget (delegated to separate file)
   Widget _buildFooter(BuildContext context, bool isMobile) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 16 : 48,
-        vertical: isMobile ? 32 : 48,
-      ),
-      color: Colors.grey[900],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Footer Content Grid
-          GridView.count(
-            crossAxisCount: isMobile ? 1 : 4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 32,
-            crossAxisSpacing: 32,
-            children: [
-              _buildFooterColumn('Company', [
-                'About Us',
-                'Careers',
-                'Blog',
-                'Press',
-              ]),
-              _buildFooterColumn('Product', [
-                'Features',
-                'Pricing',
-                'Security',
-                'Updates',
-              ]),
-              _buildFooterColumn('Support', [
-                'Documentation',
-                'FAQ',
-                'Contact Us',
-                'Community',
-              ]),
-              _buildFooterColumn('Legal', [
-                'Privacy Policy',
-                'Terms of Service',
-                'Cookie Policy',
-                'Sitemap',
-              ]),
-            ],
-          ),
-          const SizedBox(height: 48),
-          // Social Media Links
-          Row(
-            children: [
-              _buildSocialIcon(Icons.facebook, 'Facebook'),
-              const SizedBox(width: 16),
-              _buildSocialIcon(Icons.business, 'LinkedIn'),
-              const SizedBox(width: 16),
-              _buildSocialIcon(Icons.camera_alt, 'Instagram'),
-              const SizedBox(width: 16),
-              _buildSocialIcon(Icons.mail, 'Twitter'),
-            ],
-          ),
-          const SizedBox(height: 32),
-          // Copyright
-          Container(
-            padding: const EdgeInsets.only(top: 24),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.grey[700]!)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '© 2025 MakiPrint. All rights reserved.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.grey[400]),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Revolutionizing retail printing, one print at a time.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[500],
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return FooterWidget(isMobile: isMobile);
   }
-
-  Widget _buildFooterColumn(String title, List<String> items) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...items.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: InkWell(
-              onTap: () => ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('Navigate to $item'))),
-              child: Text(
-                item,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey[400]),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSocialIcon(IconData icon, String label) {
-    return Tooltip(
-      message: label,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () => ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Open $label'))),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 20, color: Colors.white),
-          ),
-        ),
-      ),
-    );
-  }
+  
 }
 
 // Carousel Item Model
