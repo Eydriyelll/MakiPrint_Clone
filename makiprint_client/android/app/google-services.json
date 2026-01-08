@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "905922407036",
+    "project_id": "makiprint-c1f86",
+    "storage_bucket": "makiprint-c1f86.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:905922407036:android:e84688888b623e361cf7f9",
+        "android_client_info": {
+          "package_name": "com.example.makiprint_client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDE7jeUSTJYKs3m2BmziuE5p-xphkZvzVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

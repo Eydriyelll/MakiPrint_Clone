@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_web_bluetooth/flutter_web_bluetooth.dart';
 
 class ScanQRPage extends StatefulWidget {
   const ScanQRPage({super.key});
@@ -9,9 +12,30 @@ class ScanQRPage extends StatefulWidget {
   State<ScanQRPage> createState() => _ScanQRPageState();
 }
 
-class _ScanQRPageState extends State<ScanQRPage> {
+class _ScanQRPageState extends State<ScanQRPage>
+    with SingleTickerProviderStateMixin {
   final List<String> _scanHistory = [];
   bool _isProcessing = false;
+  String? _lastScannedPrinter;
+  final MobileScannerController _scannerController = MobileScannerController();
+  late AnimationController _animationController;
+  final String _makiServiceUuid = "0000180d-0000-1000-8000-00805f9b34fb";
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
 
   void _onDetect(BarcodeCapture capture) async {
     if (_isProcessing) return;
@@ -22,13 +46,17 @@ class _ScanQRPageState extends State<ScanQRPage> {
       final value = barcodes.first.rawValue ?? 'Unknown QR';
 
       setState(() {
+        _lastScannedPrinter = value;
         if (!_scanHistory.contains(value)) {
           _scanHistory.insert(0, value);
           if (_scanHistory.length > 10) _scanHistory.removeLast();
         }
       });
 
-      // Try to launch if it's a URL
+      if (!kIsWeb) {
+        await _handleNativeBluetooth(value);
+      }
+
       if (Uri.tryParse(value)?.hasAbsolutePath ?? false) {
         final uri = Uri.parse(value);
         if (await canLaunchUrl(uri)) {
@@ -45,10 +73,41 @@ class _ScanQRPageState extends State<ScanQRPage> {
     _isProcessing = false;
   }
 
+  Future<void> _handleWebBluetooth() async {
+    if (!FlutterWebBluetooth.instance.isBluetoothApiSupported) {
+      _showDetectedAlert("Browser Bluetooth not supported. Please use Chrome.");
+      return;
+    }
+    try {
+      final options = RequestOptionsBuilder.acceptAllDevices(
+        optionalServices: [_makiServiceUuid],
+      );
+      final device = await FlutterWebBluetooth.instance.requestDevice(options);
+      await device.connect();
+      _showDetectedAlert("Connected to MakiPrint via Web!");
+    } catch (e) {
+      _showDetectedAlert("Connection failed: $e");
+    }
+  }
+
+  Future<void> _handleNativeBluetooth(String name) async {
+    if (await FlutterBluePlus.isSupported) {
+      await FlutterBluePlus.turnOn();
+      FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
+      FlutterBluePlus.scanResults.listen((results) {
+        for (var r in results) {
+          if (r.device.platformName == name) {
+            r.device.connect();
+            _showDetectedAlert("Connected to $name");
+            FlutterBluePlus.stopScan();
+          }
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan MakiPrint QR'),
@@ -60,123 +119,44 @@ class _ScanQRPageState extends State<ScanQRPage> {
       ),
       body: Column(
         children: [
-          // ===== HOW TO SCAN SECTION =====
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Column(
-                  children: [
-                    Icon(Icons.smartphone, size: 36, color: primaryColor),
-                    const SizedBox(height: 8),
-                    const Text('Hold your phone steady'),
-                  ],
-                ),
-                Column(
-                  children: [
-                    Icon(Icons.qr_code_scanner, size: 36, color: primaryColor),
-                    const SizedBox(height: 8),
-                    const Text('Align QR inside frame'),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          const Spacer(flex: 1),
 
-          // ===== QR SCANNER SECTION =====
           Expanded(
-            flex: 3,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: MobileScanner(
-                      fit: BoxFit.cover,
-                      onDetect: _onDetect,
-                    ),
-                  ),
-                ),
-                // Animated scanning line
-                Positioned.fill(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(seconds: 2),
-                    curve: Curves.easeInOut,
-                    builder: (context, value, child) {
-                      return CustomPaint(
-                        painter: _ScannerOverlayPainter(value),
-                      );
-                    },
-                    onEnd: () => setState(() {}),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // ===== SCAN HISTORY SECTION =====
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            flex: 6,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 1,
                 child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Text(
-                        'Scan History',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: primaryColor,
-                            ),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: MobileScanner(
+                          fit: BoxFit.cover,
+                          controller: _scannerController,
+                          onDetect: _onDetect,
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: _scanHistory.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No scans yet — scan a QR to get started!',
-                                  style: TextStyle(color: Colors.grey),
-                                  textAlign: TextAlign.center,
+                      // Animated scanning line fixed within QR bounds
+                      AnimatedBuilder(
+                        animation: _animationController,
+                        builder: (context, child) {
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              return CustomPaint(
+                                size: Size(
+                                  constraints.maxWidth,
+                                  constraints.maxHeight,
                                 ),
-                              )
-                            : ListView.builder(
-                                itemCount: _scanHistory.length,
-                                itemBuilder: (context, index) {
-                                  final item = _scanHistory[index];
-                                  return ListTile(
-                                    leading: const Icon(Icons.history),
-                                    title: Text(
-                                      item,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    onTap: () async {
-                                      final uri = Uri.tryParse(item);
-                                      if (uri != null &&
-                                          await canLaunchUrl(uri)) {
-                                        await launchUrl(
-                                          uri,
-                                          mode: LaunchMode.externalApplication,
-                                        );
-                                      }
-                                    },
-                                  );
-                                },
-                              ),
+                                painter: _ScannerOverlayPainter(
+                                  _animationController.value,
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -184,6 +164,36 @@ class _ScanQRPageState extends State<ScanQRPage> {
               ),
             ),
           ),
+
+          const SizedBox(height: 16),
+          const Text(
+            "Align QR code within the frame to scan",
+            style: TextStyle(color: Colors.grey, fontSize: 14),
+          ),
+
+          const SizedBox(height: 24),
+
+          if (_lastScannedPrinter != null)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton.icon(
+                onPressed: kIsWeb
+                    ? _handleWebBluetooth
+                    : () => _handleNativeBluetooth(_lastScannedPrinter!),
+                icon: const Icon(Icons.bluetooth),
+                label: Text("Connect to $_lastScannedPrinter"),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+
+          const Spacer(flex: 2),
         ],
       ),
     );
@@ -206,7 +216,6 @@ class _ScanQRPageState extends State<ScanQRPage> {
   }
 }
 
-// ===== Overlay Painter for Scan Animation =====
 class _ScannerOverlayPainter extends CustomPainter {
   final double animationValue;
   _ScannerOverlayPainter(this.animationValue);
@@ -223,6 +232,5 @@ class _ScannerOverlayPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) =>
-      oldDelegate.animationValue != animationValue;
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) => true;
 }
