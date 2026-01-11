@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:go_router/go_router.dart';
 
 class OwnerPage extends StatefulWidget {
   const OwnerPage({super.key});
@@ -12,15 +13,11 @@ class OwnerPage extends StatefulWidget {
 class _OwnerPageState extends State<OwnerPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  User? _currentUser;
 
-  // Pricing constants fetched from your project logic
-  final Map<String, int> _baseCosts = {
-    'A4': 1,
-    'Short Bond Paper': 2,
-    'Long Bond Paper': 3,
-  };
-  final int _colorExtra = 3;
+  User? _currentUser;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  String? _errorMessage; // State for the inline error
 
   @override
   void initState() {
@@ -29,16 +26,32 @@ class _OwnerPageState extends State<OwnerPage> {
   }
 
   Future<void> _login() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      setState(() => _currentUser = FirebaseAuth.instance.currentUser);
+
+      if (mounted) {
+        setState(() {
+          _currentUser = FirebaseAuth.instance.currentUser;
+        });
+      }
+    } on FirebaseAuthException catch (_) {
+      if (mounted) {
+        setState(() => _errorMessage = "Incorrect email or password.");
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Login Failed: $e")));
+      if (mounted) {
+        setState(() => _errorMessage = "An unexpected error occurred.");
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -47,42 +60,151 @@ class _OwnerPageState extends State<OwnerPage> {
     if (_currentUser == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Owner Login')),
-        body: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.lock_person,
+                    size: 80,
+                    color: Color(0xFFa1d39a),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Owner Access Only",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+
+                  // Shifted Error Banner below "Owner Access Only"
+                  if (_errorMessage != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      margin: const EdgeInsets.only(top: 16, bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFEBEE),
+                        border: Border.all(color: const Color(0xFFFFCDD2)),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(
+                                color: Color(0xFFB71C1C),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => setState(() => _errorMessage = null),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Color(0xFFB71C1C),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.key),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _isLoading
+                      ? const CircularProgressIndicator()
+                      : SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFa1d39a),
+                              foregroundColor: Colors.black87,
+                            ),
+                            onPressed: _login,
+                            child: const Text('Sign In'),
+                          ),
+                        ),
+                ],
               ),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(onPressed: _login, child: const Text('Login')),
-            ],
+            ),
           ),
         ),
       );
     }
 
+    return _buildDashboard();
+  }
+
+  Widget _buildDashboard() {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('owners')
           .doc(_currentUser!.uid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
-          return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Scaffold(
+            body: Center(child: Text("Error: Owner data not found.")),
+          );
+        }
 
-        double totalSales = (snapshot.data!['totalSales'] as num).toDouble();
-        double ownerCut = totalSales * 0.5; // 50% Cut
-        double ceoCut = totalSales * 0.5; // 50% Cut
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        double totalSales = (data['totalSales'] as num).toDouble();
+        double ownerShare = totalSales * 0.5;
+        double ceoShare = totalSales * 0.5;
 
         return Scaffold(
-          appBar: AppBar(title: Text('Dashboard: ${snapshot.data!['name']}')),
+          appBar: AppBar(
+            title: Text('Welcome, ${data['name']}'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.account_circle, size: 30),
+                onPressed: () => context.push('/profile'),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
           body: Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -92,26 +214,18 @@ class _OwnerPageState extends State<OwnerPage> {
                   "PhP ${totalSales.toStringAsFixed(2)}",
                   Colors.green,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _buildStatCard(
-                  "Your Cut (50%)",
-                  "PhP ${ownerCut.toStringAsFixed(2)}",
+                  "Owner Share (50%)",
+                  "PhP ${ownerShare.toStringAsFixed(2)}",
                   Colors.blue,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _buildStatCard(
-                  "CEO Cut (50%)",
-                  "PhP ${ceoCut.toStringAsFixed(2)}",
+                  "CEO Share (50%)",
+                  "PhP ${ceoShare.toStringAsFixed(2)}",
                   Colors.orange,
                 ),
-                const Divider(height: 40),
-                const Text(
-                  "Pricing Reference (from MakiPrint logic):",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  "A4: PhP ${_baseCosts['A4']} | Color: +PhP $_colorExtra",
-                ), // Citing pricing constants
               ],
             ),
           ),
@@ -122,8 +236,9 @@ class _OwnerPageState extends State<OwnerPage> {
 
   Widget _buildStatCard(String label, String value, Color color) {
     return Card(
+      elevation: 4,
       child: ListTile(
-        title: Text(label),
+        title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         trailing: Text(
           value,
           style: TextStyle(
